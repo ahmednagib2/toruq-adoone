@@ -153,6 +153,27 @@ class FoodwayInventoryCountSession(models.Model):
             session._create_audit_log('create', _('Inventory count session created.'))
         return sessions
 
+    def write(self, vals):
+        if not self.env.user.has_group('toruq_inventory.group_inventory_count_manager'):
+            allowed_fields = {
+                'scan_barcode', 'scan_qty', 'scan_mode',
+                'last_scanned_product_id', 'last_scanned_barcode',
+                'last_scanned_previous_qty', 'last_scanned_added_qty',
+                'last_scanned_new_qty', 'last_scanned_time'
+            }
+            disallowed = set(vals.keys()) - allowed_fields
+            if disallowed:
+                raise AccessError(_("Counters are not authorized to modify session configuration fields: %s") % ', '.join(disallowed))
+        return super(FoodwayInventoryCountSession, self).write(vals)
+
+    def unlink(self):
+        if not self.env.user.has_group('toruq_inventory.group_inventory_count_manager'):
+            raise AccessError(_("Counters are not authorized to delete inventory count sessions."))
+        for session in self:
+            if session.state not in ['draft', 'cancelled'] or session.entry_ids:
+                raise UserError(_("Cannot delete session '%s' with existing count entries. Please cancel the session instead.") % session.display_name)
+        return super(FoodwayInventoryCountSession, self).unlink()
+
     @api.depends('line_ids.is_counted', 'line_ids.inventory_difference')
     def _compute_line_metrics(self):
         for session in self:

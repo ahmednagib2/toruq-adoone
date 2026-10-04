@@ -24,11 +24,11 @@ class FoodwayInventoryCountEntry(models.Model):
     new_qty = fields.Float(string='Resulting Qty', readonly=True)
 
     def write(self, vals):
-        if not self.env.context.get('allow_audit_cleanup'):
-            raise UserError(_("Scan entry audit logs are immutable and cannot be modified."))
-        return super(FoodwayInventoryCountEntry, self).write(vals)
+        raise UserError(_("Scan entry audit logs are immutable historical evidence and cannot be modified."))
 
     def unlink(self):
-        if not self.env.context.get('allow_audit_cleanup'):
-            raise UserError(_("Scan entry audit logs are immutable and cannot be deleted."))
+        # Only internal ORM cascade deletions during session cleanup are permitted
+        for record in self:
+            if record.session_id.state not in ['draft', 'cancelled']:
+                raise UserError(_("Scan entry audit logs are immutable historical evidence and cannot be deleted."))
         return super(FoodwayInventoryCountEntry, self).unlink()

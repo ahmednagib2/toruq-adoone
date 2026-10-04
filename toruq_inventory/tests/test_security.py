@@ -85,3 +85,18 @@ class TestBlindInventorySecurity(TransactionCase):
             audit.with_user(self.user_manager).write({'message': 'Tampered message'})
         with self.assertRaises(UserError):
             audit.with_user(self.user_manager).unlink()
+
+    def test_07_employee_cannot_write_protected_session_fields(self):
+        with self.assertRaises(AccessError):
+            self.session.with_user(self.user_employee).write({'state': 'approved'})
+
+    def test_08_employee_cannot_write_counted_qty_directly(self):
+        line = self.session.line_ids[0]
+        with self.assertRaises(AccessError):
+            line.with_user(self.user_employee).write({'counted_qty': 999.0})
+
+    def test_09_cannot_delete_active_or_counted_session(self):
+        line = self.session.line_ids[0]
+        line.with_user(self.user_employee).action_update_count(2.0)
+        with self.assertRaises(UserError):
+            self.session.with_user(self.user_manager).unlink()

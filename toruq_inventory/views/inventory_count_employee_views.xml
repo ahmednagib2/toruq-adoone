@@ -78,14 +78,14 @@
 
                     <notebook>
                         <page string="قائمة منتجات الجلسة / Assigned Products">
-                            <field name="line_ids" readonly="state in ['submitted', 'approved', 'cancelled']">
-                                <list string="المنتجات المسموحة" editable="bottom" create="false" delete="false" decoration-success="is_counted" decoration-muted="not is_counted">
+                            <field name="line_ids" readonly="1">
+                                <list string="المنتجات المسموحة" create="false" delete="false" decoration-success="is_counted" decoration-muted="not is_counted">
                                     <field name="product_id" readonly="1"/>
                                     <field name="barcode" readonly="1"/>
                                     <field name="product_uom_id" readonly="1"/>
-                                    <field name="lot_id"/>
+                                    <field name="lot_id" readonly="1"/>
                                     <field name="is_counted" readonly="1"/>
-                                    <field name="counted_qty"/>
+                                    <field name="counted_qty" readonly="1"/>
                                     <field name="count_datetime" readonly="1"/>
                                 </list>
                             </field>

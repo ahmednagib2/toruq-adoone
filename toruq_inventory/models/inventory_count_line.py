@@ -129,6 +129,22 @@ class FoodwayInventoryCountLine(models.Model):
             else:
                 line.inventory_difference = 0.0
 
+    def write(self, vals):
+        if not self.env.user.has_group('toruq_inventory.group_inventory_count_manager'):
+            protected_fields = {
+                'session_id', 'company_id', 'product_id', 'location_id',
+                'system_qty_snapshot', 'stock_movement_qty', 'stock_movement_count',
+                'expected_qty_at_count', 'inventory_difference', 'counted_by_user_id',
+                'count_datetime', 'recount_history'
+            }
+            if 'counted_qty' in vals or 'is_counted' in vals:
+                if not self.env.context.get('allow_count_update'):
+                    raise AccessError(_("Direct modification of physical count metrics is restricted. Use the scanning terminal."))
+            disallowed = set(vals.keys()) & protected_fields
+            if disallowed:
+                raise AccessError(_("Counters are not authorized to modify protected line fields: %s") % ', '.join(disallowed))
+        return super(FoodwayInventoryCountLine, self).write(vals)
+
     def read(self, fields=None, load='_classic_read'):
         """ Fail-closed server security: Mask theoretical stock fields for non-managers """
         res = super(FoodwayInventoryCountLine, self).read(fields=fields, load=load)
@@ -191,7 +207,7 @@ class FoodwayInventoryCountLine(models.Model):
             op_type = 'add'
 
         now = fields.Datetime.now()
-        self.write({
+        self.with_context(allow_count_update=True).write({
             'counted_qty': new_qty,
             'is_counted': True,
             'counted_by_user_id': self.env.user.id,

@@ -15,11 +15,11 @@ class FoodwayInventoryCountAudit(models.Model):
     message = fields.Text(string='Audit Description')
 
     def write(self, vals):
-        if not self.env.context.get('allow_audit_cleanup'):
-            raise UserError(_("Audit log records are immutable and cannot be modified."))
-        return super(FoodwayInventoryCountAudit, self).write(vals)
+        raise UserError(_("Audit log records are immutable historical evidence and cannot be modified."))
 
     def unlink(self):
-        if not self.env.context.get('allow_audit_cleanup'):
-            raise UserError(_("Audit log records are immutable and cannot be deleted."))
+        # Only internal ORM cascade deletions during session cleanup are permitted
+        for record in self:
+            if record.session_id.state not in ['draft', 'cancelled']:
+                raise UserError(_("Audit log records are immutable historical evidence and cannot be deleted."))
         return super(FoodwayInventoryCountAudit, self).unlink()
