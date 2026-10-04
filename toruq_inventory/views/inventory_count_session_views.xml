@@ -49,10 +49,24 @@
                     <!-- Honeywell Quick Scan Input Bar -->
                     <div class="card p-3 mb-3 bg-light border-primary shadow-sm" invisible="state not in ['opened', 'recount_in_progress']">
                         <group col="4" string="📷 صندوق مسح الباركود السريع (Honeywell Scanner)">
-                            <field name="scan_barcode" placeholder="امسح بالماكينة أو ادخل الباركود..." class="form-control-lg fw-bold border-primary"/>
+                            <field name="scan_barcode" placeholder="امسح بالماكينة أو ادخل الباركود هنا..." class="form-control-lg fw-bold border-primary"/>
                             <field name="scan_qty" class="form-control-lg text-center"/>
                             <field name="scan_mode" widget="radio"/>
                             <button name="action_scan_barcode" type="object" string="تأكيد المسح ⏎" class="btn-primary btn-lg w-100 shadow-sm"/>
+                        </group>
+                    </div>
+
+                    <!-- Last Scan Feedback Banner -->
+                    <div class="card p-3 mb-3 bg-success-subtle border-success shadow-sm" invisible="not last_scanned_product_id">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="badge bg-success fs-6">✅ تم الحفظ والتراكم بنجاح في الجلسة</span>
+                            <span class="text-muted"><field name="last_scanned_time" readonly="1"/></span>
+                        </div>
+                        <group col="4">
+                            <field name="last_scanned_product_id" readonly="1"/>
+                            <field name="last_scanned_previous_qty" readonly="1"/>
+                            <field name="last_scanned_added_qty" readonly="1"/>
+                            <field name="last_scanned_new_qty" class="fw-bold text-success fs-5" readonly="1"/>
                         </group>
                     </div>
 

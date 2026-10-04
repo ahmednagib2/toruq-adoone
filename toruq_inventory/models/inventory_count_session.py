@@ -107,6 +107,14 @@ class FoodwayInventoryCountSession(models.Model):
         ('set_total', 'تحديد الإجمالي (Set Total)')
     ], string='Scan Mode', default='add', required=True)
 
+    # Last Scan Feedback Fields
+    last_scanned_product_id = fields.Many2one('product.product', string='آخر منتج تم مسحه', readonly=True)
+    last_scanned_barcode = fields.Char(string='آخر باركود', readonly=True)
+    last_scanned_previous_qty = fields.Float(string='الكمية السابقة', readonly=True)
+    last_scanned_added_qty = fields.Float(string='الكمية المضافة الآن', readonly=True)
+    last_scanned_new_qty = fields.Float(string='الإجمالي الحقيقي حالياً', readonly=True)
+    last_scanned_time = fields.Datetime(string='وقت آخر مسح', readonly=True)
+
     start_datetime = fields.Datetime(string='Start Timestamp', readonly=True)
     opened_by_user_id = fields.Many2one('res.users', string='Opened By', readonly=True)
     submitted_datetime = fields.Datetime(string='Submitted Timestamp', readonly=True)
@@ -178,22 +186,34 @@ class FoodwayInventoryCountSession(models.Model):
             raise UserError(_("الباركود '%s' غير موجود ضمن قائمة منتجات هذه الجلسة!") % barcode_str)
 
         target_line = lines[0]
+        prev_qty = target_line.counted_qty if target_line.is_counted else 0.0
         mode = self.scan_mode or 'add'
         qty = self.scan_qty if self.scan_qty > 0 else 1.0
 
         target_line.action_update_count(qty, mode=mode)
+        new_total = target_line.counted_qty
+
+        added_val = qty if mode == 'add' else (new_total - prev_qty)
 
         self.write({
             'scan_barcode': False,
             'scan_qty': 1.0,
+            'last_scanned_product_id': target_line.product_id.id,
+            'last_scanned_barcode': barcode_str,
+            'last_scanned_previous_qty': prev_qty,
+            'last_scanned_added_qty': added_val,
+            'last_scanned_new_qty': new_total,
+            'last_scanned_time': fields.Datetime.now(),
         })
 
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
-                'title': _('تم المسح بنجاح!'),
-                'message': _('المنتج: %s | الكمية الإجمالية المعدودة: %s') % (target_line.product_id.display_name, target_line.counted_qty),
+                'title': _('تم المسح وتراكم الكمية بنجاح!'),
+                'message': _('المنتج: %s | الكمية السابقة: %s | المضافة: %s | الإجمالي الجديد: %s') % (
+                    target_line.product_id.display_name, prev_qty, added_val, new_total
+                ),
                 'type': 'success',
                 'sticky': False,
             }
