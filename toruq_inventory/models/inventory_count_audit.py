@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
-from odoo import models, fields
+from odoo import models, fields, _
+from odoo.exceptions import UserError
 
 class FoodwayInventoryCountAudit(models.Model):
     _name = 'foodway.inventory.count.audit'
@@ -12,3 +13,13 @@ class FoodwayInventoryCountAudit(models.Model):
     timestamp = fields.Datetime(string='Timestamp', default=fields.Datetime.now, required=True)
     action = fields.Char(string='Action', required=True)
     message = fields.Text(string='Audit Description')
+
+    def write(self, vals):
+        if not self.env.context.get('allow_audit_cleanup'):
+            raise UserError(_("Audit log records are immutable and cannot be modified."))
+        return super(FoodwayInventoryCountAudit, self).write(vals)
+
+    def unlink(self):
+        if not self.env.context.get('allow_audit_cleanup'):
+            raise UserError(_("Audit log records are immutable and cannot be deleted."))
+        return super(FoodwayInventoryCountAudit, self).unlink()

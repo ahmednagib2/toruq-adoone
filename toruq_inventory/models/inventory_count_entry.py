@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
-from odoo import models, fields
+from odoo import models, fields, _
+from odoo.exceptions import UserError
 
 class FoodwayInventoryCountEntry(models.Model):
     _name = 'foodway.inventory.count.entry'
@@ -21,3 +22,13 @@ class FoodwayInventoryCountEntry(models.Model):
     previous_qty = fields.Float(string='Previous Qty', readonly=True)
     input_qty = fields.Float(string='Scanned Input Qty', readonly=True)
     new_qty = fields.Float(string='Resulting Qty', readonly=True)
+
+    def write(self, vals):
+        if not self.env.context.get('allow_audit_cleanup'):
+            raise UserError(_("Scan entry audit logs are immutable and cannot be modified."))
+        return super(FoodwayInventoryCountEntry, self).write(vals)
+
+    def unlink(self):
+        if not self.env.context.get('allow_audit_cleanup'):
+            raise UserError(_("Scan entry audit logs are immutable and cannot be deleted."))
+        return super(FoodwayInventoryCountEntry, self).unlink()

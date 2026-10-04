@@ -32,11 +32,17 @@ class FoodwayInventoryCountReportWizard(models.TransientModel):
         if not xlsxwriter:
             raise UserError(_("Python 'xlsxwriter' library is required to generate Excel reports."))
 
-        domain = []
+        domain = [('company_id', 'in', self.env.companies.ids)]
         if self.session_id:
             domain.append(('session_id', '=', self.session_id.id))
+        if self.warehouse_id:
+            domain.append(('session_id.warehouse_id', '=', self.warehouse_id.id))
         if self.location_id:
             domain.append(('location_id', '=', self.location_id.id))
+        if self.date_from:
+            domain.append(('session_id.start_datetime', '>=', self.date_from))
+        if self.date_to:
+            domain.append(('session_id.start_datetime', '<=', self.date_to))
         if self.only_discrepancies:
             domain.extend([('is_counted', '=', True), ('inventory_difference', '!=', 0)])
 

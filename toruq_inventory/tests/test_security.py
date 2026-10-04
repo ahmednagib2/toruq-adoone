@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 from odoo.tests.common import TransactionCase
-from odoo.exceptions import AccessError
+from odoo.exceptions import AccessError, UserError
 
 class TestBlindInventorySecurity(TransactionCase):
 
@@ -60,3 +60,28 @@ class TestBlindInventorySecurity(TransactionCase):
         self.session.with_user(self.user_employee).action_submit()
         with self.assertRaises(AccessError):
             self.session.with_user(self.user_employee).action_approve()
+
+    def test_04_employee_cannot_read_group_confidential_fields(self):
+        with self.assertRaises(AccessError):
+            self.env['foodway.inventory.count.line'].with_user(self.user_employee).read_group(
+                [('session_id', '=', self.session.id)],
+                ['inventory_difference:sum'],
+                ['product_id']
+            )
+
+    def test_05_employee_cannot_export_confidential_fields(self):
+        line = self.session.line_ids[0]
+        with self.assertRaises(AccessError):
+            line.with_user(self.user_employee).export_data(['product_id', 'system_qty_snapshot', 'inventory_difference'])
+
+    def test_06_audit_log_immutability(self):
+        audit = self.env['foodway.inventory.count.audit'].create({
+            'session_id': self.session.id,
+            'user_id': self.user_manager.id,
+            'action': 'TEST_ACTION',
+            'message': 'Test audit message',
+        })
+        with self.assertRaises(UserError):
+            audit.with_user(self.user_manager).write({'message': 'Tampered message'})
+        with self.assertRaises(UserError):
+            audit.with_user(self.user_manager).unlink()

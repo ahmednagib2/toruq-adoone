@@ -3,6 +3,14 @@
 from odoo import models, fields, api, _
 from odoo.exceptions import UserError, AccessError
 
+CONFIDENTIAL_FIELDS = [
+    'system_qty_snapshot',
+    'stock_movement_qty',
+    'stock_movement_count',
+    'expected_qty_at_count',
+    'inventory_difference'
+]
+
 class FoodwayInventoryCountLine(models.Model):
     _name = 'foodway.inventory.count.line'
     _description = 'Blind Inventory Count Line'
@@ -20,25 +28,29 @@ class FoodwayInventoryCountLine(models.Model):
         string='Company',
         related='session_id.company_id',
         store=True,
-        readonly=True
+        readonly=True,
+        index=True
     )
     product_id = fields.Many2one(
         'product.product',
         string='Product',
         required=True,
-        readonly=True
+        readonly=True,
+        index=True
     )
     barcode = fields.Char(
         string='Barcode',
         related='product_id.barcode',
         store=True,
-        readonly=True
+        readonly=True,
+        index=True
     )
     location_id = fields.Many2one(
         'stock.location',
         string='Location',
         required=True,
-        readonly=True
+        readonly=True,
+        index=True
     )
     product_uom_id = fields.Many2one(
         'uom.uom',
@@ -75,7 +87,7 @@ class FoodwayInventoryCountLine(models.Model):
         copy=False
     )
 
-    # Confidential Fields — Hidden from Employee via ORM and Server Security Override
+    # Confidential Fields — Hidden from Employee via ORM and Server Security Overrides
     system_qty_snapshot = fields.Float(
         string='Snapshot System Qty',
         readonly=True,
@@ -118,15 +130,33 @@ class FoodwayInventoryCountLine(models.Model):
                 line.inventory_difference = 0.0
 
     def read(self, fields=None, load='_classic_read'):
-        """ Server-side fail-closed security override: Strip theoretical fields for non-managers """
+        """ Fail-closed server security: Mask theoretical stock fields for non-managers """
         res = super(FoodwayInventoryCountLine, self).read(fields=fields, load=load)
         if not self.env.user.has_group('toruq_inventory.group_inventory_count_manager'):
-            confidential = ['system_qty_snapshot', 'stock_movement_qty', 'stock_movement_count', 'expected_qty_at_count', 'inventory_difference']
             for record in res:
-                for f in confidential:
+                for f in CONFIDENTIAL_FIELDS:
                     if f in record:
                         record[f] = False
         return res
+
+    @api.model
+    def read_group(self, domain, fields, groupby, offset=0, limit=None, orderby=False, lazy=True):
+        """ Prevent non-managers from aggregating confidential inventory fields """
+        if not self.env.user.has_group('toruq_inventory.group_inventory_count_manager'):
+            for f in CONFIDENTIAL_FIELDS:
+                if any(f in field_str for field_str in fields) or f in (groupby or []):
+                    raise AccessError(_("You are not authorized to aggregate confidential inventory quantities."))
+        return super(FoodwayInventoryCountLine, self).read_group(
+            domain, fields, groupby, offset=offset, limit=limit, orderby=orderby, lazy=lazy
+        )
+
+    def export_data(self, fields_to_export):
+        """ Block non-managers from exporting confidential stock valuation fields """
+        if not self.env.user.has_group('toruq_inventory.group_inventory_count_manager'):
+            for f in CONFIDENTIAL_FIELDS:
+                if f in fields_to_export:
+                    raise AccessError(_("You are not authorized to export confidential inventory data."))
+        return super(FoodwayInventoryCountLine, self).export_data(fields_to_export)
 
     def action_update_count(self, input_value, mode='add'):
         self.ensure_one()
@@ -144,6 +174,13 @@ class FoodwayInventoryCountLine(models.Model):
 
         if val < 0:
             raise UserError(_("Quantity cannot be negative."))
+
+        # Tracked product validation
+        if self.product_id.tracking in ['lot', 'serial'] and not self.lot_id and self.env.context.get('require_lot'):
+            raise UserError(_("Product '%s' requires a Lot/Serial number.") % self.product_id.display_name)
+
+        if self.product_id.tracking == 'serial' and val > 1.0 and mode == 'add':
+            raise UserError(_("Serial tracked product '%s' quantity cannot exceed 1.0 per unit.") % self.product_id.display_name)
 
         prev_qty = self.counted_qty if self.is_counted else 0.0
         if mode == 'set_total':
@@ -181,26 +218,39 @@ class FoodwayInventoryCountLine(models.Model):
         }
 
     def _recompute_movement_comparison(self, eval_datetime=None):
-        """ Calculates stock movements between session start and evaluation datetime using location boundary rules """
+        """ Compatibility wrapper delegating to batch movement calculation """
+        return self._batch_recompute_movement_comparison(eval_datetime=eval_datetime)
+
+    def _batch_recompute_movement_comparison(self, eval_datetime=None):
+        """ High-performance batch movement engine calculating net stock changes across session lines """
+        if not self:
+            return
+
         eval_dt = eval_datetime or fields.Datetime.now()
-        for line in self:
-            session = line.session_id
+        sessions = self.mapped('session_id')
+
+        for session in sessions:
+            session_lines = self.filtered(lambda l: l.session_id.id == session.id)
             if not session.start_datetime:
-                line.write({
-                    'stock_movement_qty': 0.0,
-                    'stock_movement_count': 0,
-                    'expected_qty_at_count': line.system_qty_snapshot,
-                })
+                for line in session_lines:
+                    line.write({
+                        'stock_movement_qty': 0.0,
+                        'stock_movement_count': 0,
+                        'expected_qty_at_count': line.system_qty_snapshot,
+                    })
                 continue
 
-            # Target location domain
-            target_loc_ids = self.env['stock.location'].search([('id', 'child_of', line.location_id.id)]).ids
+            target_loc_ids = self.env['stock.location'].search([('id', 'child_of', session.location_id.id)]).ids
+            prod_ids = session_lines.mapped('product_id').ids
 
-            # Query completed stock moves involving location & product
+            if not prod_ids or not target_loc_ids:
+                continue
+
+            # Batch query completed stock moves for all products in scope
             moves = self.env['stock.move'].search([
-                ('product_id', '=', line.product_id.id),
+                ('product_id', 'in', prod_ids),
                 ('state', '=', 'done'),
-                ('company_id', '=', line.company_id.id),
+                ('company_id', '=', session.company_id.id),
                 ('date', '>=', session.start_datetime),
                 ('date', '<=', eval_dt),
                 '|',
@@ -208,25 +258,34 @@ class FoodwayInventoryCountLine(models.Model):
                 ('location_dest_id', 'in', target_loc_ids),
             ])
 
-            net_qty = 0.0
-            move_count = 0
+            # Group movement net quantities by product_id
+            move_stats = {}
             for m in moves:
                 is_dest_in = m.location_dest_id.id in target_loc_ids
                 is_src_in = m.location_id.id in target_loc_ids
+                p_id = m.product_id.id
 
-                # Incoming boundary move (Dest inside target, Src outside target)
+                if p_id not in move_stats:
+                    move_stats[p_id] = {'net_qty': 0.0, 'count': 0}
+
+                # Incoming boundary move
                 if is_dest_in and not is_src_in:
-                    net_qty += m.product_uom_qty
-                    move_count += 1
-                # Outgoing boundary move (Src inside target, Dest outside target)
+                    move_stats[p_id]['net_qty'] += m.product_uom_qty
+                    move_stats[p_id]['count'] += 1
+                # Outgoing boundary move
                 elif is_src_in and not is_dest_in:
-                    net_qty -= m.product_uom_qty
-                    move_count += 1
-                # Internal transfer within target zone nets to 0 (no effect on total zone quantity)
+                    move_stats[p_id]['net_qty'] -= m.product_uom_qty
+                    move_stats[p_id]['count'] += 1
 
-            expected = line.system_qty_snapshot + net_qty
-            line.write({
-                'stock_movement_qty': net_qty,
-                'stock_movement_count': move_count,
-                'expected_qty_at_count': expected,
-            })
+            # Update lines in batch
+            for line in session_lines:
+                stats = move_stats.get(line.product_id.id, {'net_qty': 0.0, 'count': 0})
+                net_qty = stats['net_qty']
+                move_count = stats['count']
+                expected = line.system_qty_snapshot + net_qty
+
+                line.write({
+                    'stock_movement_qty': net_qty,
+                    'stock_movement_count': move_count,
+                    'expected_qty_at_count': expected,
+                })
