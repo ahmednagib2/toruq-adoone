@@ -164,13 +164,49 @@ class FoodwayInventoryCountSession(models.Model):
             else:
                 session.discrepancy_lines_count = 0
 
+    # Quick Mobile Quantity Preset Actions
+    def action_set_qty_1(self):
+        self.ensure_one()
+        self.write({'scan_qty': 1.0})
+        return True
+
+    def action_set_qty_2(self):
+        self.ensure_one()
+        self.write({'scan_qty': 2.0})
+        return True
+
+    def action_set_qty_5(self):
+        self.ensure_one()
+        self.write({'scan_qty': 5.0})
+        return True
+
+    def action_set_qty_10(self):
+        self.ensure_one()
+        self.write({'scan_qty': 10.0})
+        return True
+
+    def action_set_qty_12(self):
+        self.ensure_one()
+        self.write({'scan_qty': 12.0})
+        return True
+
+    def action_set_qty_24(self):
+        self.ensure_one()
+        self.write({'scan_qty': 24.0})
+        return True
+
+    def action_set_qty_50(self):
+        self.ensure_one()
+        self.write({'scan_qty': 50.0})
+        return True
+
     def action_scan_barcode(self):
         self.ensure_one()
         if self.state not in ['opened', 'recount_in_progress']:
             raise UserError(_("Cannot scan barcodes when session state is '%s'.") % self.state)
 
         if not self.scan_barcode:
-            return True
+            raise UserError(_("برجاء مسح أو إدخال الباركود أولاً!"))
 
         barcode_str = self.scan_barcode.strip()
         lines = self.line_ids.filtered(lambda l: (l.barcode and l.barcode.strip() == barcode_str) or (l.product_id.default_code and l.product_id.default_code.strip() == barcode_str))
