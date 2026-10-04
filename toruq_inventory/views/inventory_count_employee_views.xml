@@ -15,6 +15,16 @@
                         الجرد الأعمى - Honeywell Barcode Wedge Scanner
                     </div>
 
+                    <!-- Honeywell Quick Scan Input Bar -->
+                    <div class="card p-3 mb-3 bg-light border-primary shadow-sm" invisible="state not in ['opened', 'recount_in_progress']">
+                        <group col="4" string="📷 صندوق مسح الباركود السريع (Honeywell Scanner)">
+                            <field name="scan_barcode" placeholder="امسح بالماكينة أو ادخل الباركود..." class="form-control-lg fw-bold border-primary"/>
+                            <field name="scan_qty" class="form-control-lg text-center"/>
+                            <field name="scan_mode" widget="radio"/>
+                            <button name="action_scan_barcode" type="object" string="تأكيد المسح ⏎" class="btn-primary btn-lg w-100 shadow-sm"/>
+                        </group>
+                    </div>
+
                     <group col="2">
                         <group string="بيانات الجلسة الحالية">
                             <field name="name" readonly="1"/>

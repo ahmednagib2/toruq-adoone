@@ -1,47 +1,91 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Session Form View (Manager View) -->
+    <!-- Session List View -->
+    <record id="view_foodway_inventory_count_session_list" model="ir.ui.view">
+        <field name="name">foodway.inventory.count.session.list</field>
+        <field name="model">foodway.inventory.count.session</field>
+        <field name="arch" type="xml">
+            <list string="جلسات الجرد الأعمى" decoration-info="state == 'opened'" decoration-warning="state == 'recount_requested'" decoration-success="state == 'approved'" decoration-muted="state == 'cancelled'">
+                <field name="name"/>
+                <field name="session_name"/>
+                <field name="warehouse_id"/>
+                <field name="location_id"/>
+                <field name="start_datetime"/>
+                <field name="total_lines_count"/>
+                <field name="counted_lines_count"/>
+                <field name="uncounted_lines_count"/>
+                <field name="discrepancy_lines_count" groups="toruq_inventory.group_inventory_count_manager"/>
+                <field name="state" widget="badge"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Session Manager Form View -->
     <record id="view_foodway_inventory_count_session_form" model="ir.ui.view">
         <field name="name">foodway.inventory.count.session.form</field>
         <field name="model">foodway.inventory.count.session</field>
         <field name="arch" type="xml">
-            <form string="جلسة الجرد الأعمى / Inventory Count Session">
+            <form string="جلسة الجرد الأعمى">
                 <header>
-                    <button name="action_open" string="فتح الجرد وبدء العد" type="object" class="oe_highlight" invisible="state not in ['draft', 'recount_requested']"/>
-                    <button name="action_submit" string="إرسال للمدير" type="object" class="btn-primary" invisible="state not in ['opened', 'recount_in_progress']"/>
-                    <button name="action_approve" string="اعتماد الجرد وتطبيق التسوية" type="object" class="btn-success" invisible="state not in ['submitted']" confirm="هل أنت تأكد من اعتماد الجرد؟ سيتم تطبيق تسوية المخزون فوراً."/>
-                    <button name="action_request_recount" string="طلب إعادة العد" type="object" class="btn-warning" invisible="state not in ['submitted']"/>
-                    <button name="action_cancel" string="إلغاء الجلسة" type="object" class="btn-secondary" invisible="state in ['approved', 'cancelled']"/>
+                    <button name="action_open" string="فتح الجرد وبدء العد" type="object" class="btn-primary" invisible="state not in ['draft', 'recount_requested']"/>
+                    <button name="action_submit" string="إرسال الجلسة للمدير" type="object" class="btn-success" invisible="state not in ['opened', 'recount_in_progress']"/>
+                    <button name="%(action_foodway_inventory_count_recount_wizard)d" string="طلب إعادة العد (Recount)" type="action" class="btn-warning" invisible="state != 'submitted'"/>
+                    <button name="action_approve" string="اعتماد الجرد وتطبيق التسوية" type="object" class="btn-success fw-bold" invisible="state != 'submitted'" confirm="هل أنت متأكد من اعتماد الجرد؟ سيتم تعديل كميات المخزون في السيستم فوراً ولن يمكنك التراجع."/>
+                    <button name="action_cancel" string="إلغاء الجلسة" type="object" class="btn-secondary" invisible="state in ['approved', 'cancelled']" confirm="هل أنت متأكد من إلغاء هذه الجلسة؟"/>
                     <field name="state" widget="statusbar" statusbar_visible="draft,opened,submitted,approved"/>
                 </header>
                 <sheet>
+                    <div class="oe_button_box" name="button_box">
+                    </div>
                     <div class="oe_title">
                         <h1>
                             <field name="name" readonly="1"/>
                         </h1>
                         <h2>
-                            <field name="session_name" placeholder="اسم الجلسة (مثال: جرد معرض الرياض)" readonly="state != 'draft'"/>
+                            <field name="session_name" placeholder="مثال: جرد الفرع الرئيسي - أكتوبر 2026" readonly="state != 'draft'"/>
                         </h2>
                     </div>
-                    <group>
-                        <group string="بيانات الموقع والشركة">
+
+                    <!-- Honeywell Quick Scan Input Bar -->
+                    <div class="card p-3 mb-3 bg-light border-primary shadow-sm" invisible="state not in ['opened', 'recount_in_progress']">
+                        <group col="4" string="📷 صندوق مسح الباركود السريع (Honeywell Scanner)">
+                            <field name="scan_barcode" placeholder="امسح بالماكينة أو ادخل الباركود..." class="form-control-lg fw-bold border-primary"/>
+                            <field name="scan_qty" class="form-control-lg text-center"/>
+                            <field name="scan_mode" widget="radio"/>
+                            <button name="action_scan_barcode" type="object" string="تأكيد المسح ⏎" class="btn-primary btn-lg w-100 shadow-sm"/>
+                        </group>
+                    </div>
+
+                    <group col="2">
+                        <group string="إعدادات ونطاق الجرد">
                             <field name="company_id" options="{'no_create': True}" readonly="state != 'draft'"/>
                             <field name="warehouse_id" options="{'no_create': True}" readonly="state != 'draft'"/>
                             <field name="location_id" options="{'no_create': True}" readonly="state != 'draft'"/>
                             <field name="include_child_locations" readonly="state != 'draft'"/>
-                        </group>
-                        <group string="الموظفون ونطاق المنتجات">
-                            <field name="assigned_user_ids" widget="many2many_tags" options="{'no_create': True}" readonly="state != 'draft'"/>
                             <field name="product_scope" widget="radio" readonly="state != 'draft'"/>
                             <field name="category_ids" widget="many2many_tags" invisible="product_scope != 'category'" readonly="state != 'draft'"/>
                             <field name="product_ids" widget="many2many_tags" invisible="product_scope != 'products'" readonly="state != 'draft'"/>
+                            <field name="assigned_user_ids" widget="many2many_tags" readonly="state not in ['draft', 'opened', 'recount_in_progress']"/>
+                        </group>
+                        <group string="إحصائيات وتتبع الجلسة">
+                            <field name="start_datetime" readonly="1"/>
+                            <field name="opened_by_user_id" readonly="1"/>
+                            <field name="submitted_datetime" readonly="1"/>
+                            <field name="submitted_by_user_id" readonly="1"/>
+                            <field name="approved_datetime" readonly="1"/>
+                            <field name="approved_by_user_id" readonly="1"/>
+                            <field name="recount_round" readonly="1"/>
+                            <field name="total_lines_count"/>
+                            <field name="counted_lines_count"/>
+                            <field name="uncounted_lines_count"/>
+                            <field name="discrepancy_lines_count" groups="toruq_inventory.group_inventory_count_manager"/>
                         </group>
                     </group>
 
                     <notebook>
-                        <page string="نتائج العد والمنتجات / Count Lines">
-                            <field name="line_ids" readonly="state in ['approved', 'cancelled']">
-                                <list string="سطور الجرد" editable="bottom" create="false" delete="false" decoration-warning="is_counted and inventory_difference != 0" decoration-success="is_counted and inventory_difference == 0">
+                        <page string="سطور الجرد والتسوية / Count Lines">
+                            <field name="line_ids" readonly="state in ['submitted', 'approved', 'cancelled']">
+                                <list string="سطور الجرد" editable="bottom" create="false" delete="false" decoration-danger="inventory_difference != 0 and is_counted" decoration-success="is_counted and inventory_difference == 0">
                                     <field name="product_id" readonly="1"/>
                                     <field name="barcode" readonly="1"/>
                                     <field name="location_id" readonly="1"/>
@@ -52,24 +96,14 @@
                                     <field name="counted_by_user_id" readonly="1"/>
                                     <field name="count_datetime" readonly="1"/>
                                     <field name="system_qty_snapshot" groups="toruq_inventory.group_inventory_count_manager" readonly="1"/>
+                                    <field name="stock_movement_qty" groups="toruq_inventory.group_inventory_count_manager" readonly="1"/>
                                     <field name="expected_qty_at_count" groups="toruq_inventory.group_inventory_count_manager" readonly="1"/>
                                     <field name="inventory_difference" groups="toruq_inventory.group_inventory_count_manager" readonly="1"/>
                                 </list>
                             </field>
                         </page>
 
-                        <page string="سجل التدقيق / Audit Log" groups="toruq_inventory.group_inventory_count_manager">
-                            <field name="audit_log_ids" readonly="1">
-                                <list string="سجل العمليات" create="false" delete="false">
-                                    <field name="timestamp"/>
-                                    <field name="user_id"/>
-                                    <field name="action"/>
-                                    <field name="message"/>
-                                </list>
-                            </field>
-                        </page>
-
-                        <page string="حركات المسح المباشرة / Scan Entry Log" groups="toruq_inventory.group_inventory_count_manager">
+                        <page string="سجل عمليات الباركود / Barcode Scan Log">
                             <field name="entry_ids" readonly="1">
                                 <list string="عمليات المسح" create="false" delete="false">
                                     <field name="timestamp"/>
@@ -83,23 +117,29 @@
                             </field>
                         </page>
 
-                        <page string="التسوية ومحرك الأمان / Manager Details" groups="toruq_inventory.group_inventory_count_manager">
-                            <group>
-                                <group string="معلومات التوثيق">
-                                    <field name="start_datetime"/>
-                                    <field name="opened_by_user_id"/>
-                                    <field name="submitted_datetime"/>
-                                    <field name="submitted_by_user_id"/>
-                                    <field name="approved_datetime"/>
-                                    <field name="approved_by_user_id"/>
-                                    <field name="recount_round"/>
-                                    <field name="adjustment_applied"/>
-                                </group>
-                                <group string="حركات المخزون الناتجة">
-                                    <field name="adjustment_move_ids" widget="many2many_tags"/>
-                                    <field name="reliability_warning"/>
-                                </group>
-                            </group>
+                        <page string="سجل تتبع التعديلات والتدقيق / Audit Trail">
+                            <field name="audit_log_ids" readonly="1">
+                                <list string="سجل التدقيق" create="false" delete="false">
+                                    <field name="timestamp"/>
+                                    <field name="user_id"/>
+                                    <field name="action"/>
+                                    <field name="message"/>
+                                </list>
+                            </field>
+                        </page>
+
+                        <page string="حركات المخزون المنفذة / Stock Adjustment Moves" invisible="not adjustment_applied" groups="toruq_inventory.group_inventory_count_manager">
+                            <field name="adjustment_move_ids" readonly="1">
+                                <list string="حركات المخزون">
+                                    <field name="date"/>
+                                    <field name="reference"/>
+                                    <field name="product_id"/>
+                                    <field name="location_id"/>
+                                    <field name="location_dest_id"/>
+                                    <field name="product_uom_qty"/>
+                                    <field name="state"/>
+                                </list>
+                            </field>
                         </page>
                     </notebook>
                 </sheet>
@@ -107,44 +147,24 @@
         </field>
     </record>
 
-    <!-- Session List View -->
-    <record id="view_foodway_inventory_count_session_list" model="ir.ui.view">
-        <field name="name">foodway.inventory.count.session.list</field>
-        <field name="model">foodway.inventory.count.session</field>
-        <field name="arch" type="xml">
-            <list string="جلسات الجرد الأعمى" decoration-info="state == 'opened'" decoration-warning="state == 'submitted'" decoration-success="state == 'approved'" decoration-muted="state == 'cancelled'">
-                <field name="name"/>
-                <field name="session_name"/>
-                <field name="company_id"/>
-                <field name="warehouse_id"/>
-                <field name="location_id"/>
-                <field name="assigned_user_ids" widget="many2many_tags"/>
-                <field name="state"/>
-                <field name="total_lines_count"/>
-                <field name="counted_lines_count"/>
-                <field name="uncounted_lines_count"/>
-                <field name="discrepancy_lines_count" groups="toruq_inventory.group_inventory_count_manager"/>
-            </list>
-        </field>
-    </record>
-
-    <!-- Session Search View -->
+    <!-- Search View -->
     <record id="view_foodway_inventory_count_session_search" model="ir.ui.view">
         <field name="name">foodway.inventory.count.session.search</field>
         <field name="model">foodway.inventory.count.session</field>
         <field name="arch" type="xml">
-            <search string="بحث الجلسات">
+            <search string="بحث جلسات الجرد">
                 <field name="name"/>
                 <field name="session_name"/>
                 <field name="warehouse_id"/>
                 <field name="location_id"/>
-                <filter string="الجلسات الجارية" name="in_progress" domain="[('state', 'in', ['opened', 'recount_in_progress'])]"/>
-                <filter string="في انتظار المراجعة والاعتماد" name="submitted" domain="[('state', '=', 'submitted')]"/>
-                <filter string="تم اعتمادها" name="approved" domain="[('state', '=', 'approved')]"/>
+                <field name="assigned_user_ids"/>
+                <filter string="جارية / In Progress" name="in_progress" domain="[('state', 'in', ['opened', 'recount_in_progress'])]"/>
+                <filter string="مرفوعة للمراجعة / Submitted" name="submitted" domain="[('state', '=', 'submitted')]"/>
+                <filter string="معتمدة / Approved" name="approved" domain="[('state', '=', 'approved')]"/>
                 <group expand="0" string="تجميع حسب">
-                    <filter string="الحالة" name="group_state" context="{'group_by': 'state'}"/>
-                    <filter string="المخزن" name="group_warehouse" context="{'group_by': 'warehouse_id'}"/>
+                    <filter string="المستودع" name="group_warehouse" context="{'group_by': 'warehouse_id'}"/>
                     <filter string="الموقع" name="group_location" context="{'group_by': 'location_id'}"/>
+                    <filter string="الحالة" name="group_state" context="{'group_by': 'state'}"/>
                 </group>
             </search>
         </field>

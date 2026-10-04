@@ -99,6 +99,14 @@ class FoodwayInventoryCountSession(models.Model):
         string='Audit Logs'
     )
 
+    # Honeywell Wedge Quick Scan Fields
+    scan_barcode = fields.Char(string='Scan Barcode / مسح الباركود', copy=False)
+    scan_qty = fields.Float(string='Scan Quantity / الكمية', default=1.0)
+    scan_mode = fields.Selection([
+        ('add', 'إضافة (+1 أو الكمية)'),
+        ('set_total', 'تحديد الإجمالي (Set Total)')
+    ], string='Scan Mode', default='add', required=True)
+
     start_datetime = fields.Datetime(string='Start Timestamp', readonly=True)
     opened_by_user_id = fields.Many2one('res.users', string='Opened By', readonly=True)
     submitted_datetime = fields.Datetime(string='Submitted Timestamp', readonly=True)
@@ -148,6 +156,49 @@ class FoodwayInventoryCountSession(models.Model):
             else:
                 session.discrepancy_lines_count = 0
 
+    def action_scan_barcode(self):
+        self.ensure_one()
+        if self.state not in ['opened', 'recount_in_progress']:
+            raise UserError(_("Cannot scan barcodes when session state is '%s'.") % self.state)
+
+        if not self.scan_barcode:
+            return True
+
+        barcode_str = self.scan_barcode.strip()
+        lines = self.line_ids.filtered(lambda l: (l.barcode and l.barcode.strip() == barcode_str) or (l.product_id.default_code and l.product_id.default_code.strip() == barcode_str))
+        
+        if not lines:
+            product = self.env['product.product'].search([
+                '|', ('barcode', '=', barcode_str), ('default_code', '=', barcode_str)
+            ], limit=1)
+            if product:
+                lines = self.line_ids.filtered(lambda l: l.product_id.id == product.id)
+
+        if not lines:
+            raise UserError(_("الباركود '%s' غير موجود ضمن قائمة منتجات هذه الجلسة!") % barcode_str)
+
+        target_line = lines[0]
+        mode = self.scan_mode or 'add'
+        qty = self.scan_qty if self.scan_qty > 0 else 1.0
+
+        target_line.action_update_count(qty, mode=mode)
+
+        self.write({
+            'scan_barcode': False,
+            'scan_qty': 1.0,
+        })
+
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _('تم المسح بنجاح!'),
+                'message': _('المنتج: %s | الكمية الإجمالية المعدودة: %s') % (target_line.product_id.display_name, target_line.counted_qty),
+                'type': 'success',
+                'sticky': False,
+            }
+        }
+
     def action_open(self):
         self.ensure_one()
         if not self.env.user.has_group('toruq_inventory.group_inventory_count_manager'):
@@ -155,13 +206,11 @@ class FoodwayInventoryCountSession(models.Model):
         if self.state not in ['draft', 'recount_requested']:
             raise UserError(_("Session cannot be opened from state '%s'.") % self.state)
 
-        # Build location domain
         if self.include_child_locations:
             loc_ids = self.env['stock.location'].search([('id', 'child_of', self.location_id.id)]).ids
         else:
             loc_ids = [self.location_id.id]
 
-        # Build product domain
         product_domain = [('is_storable', '=', True)]
         if self.product_scope == 'category' and self.category_ids:
             product_domain.append(('categ_id', 'in', self.category_ids.ids))
@@ -172,13 +221,11 @@ class FoodwayInventoryCountSession(models.Model):
         if not products:
             raise UserError(_("No storable products match the session scope criteria."))
 
-        # Delete existing draft lines if opening from draft
         if self.state == 'draft':
             self.line_ids.unlink()
 
             lines_to_create = []
             for prod in products:
-                # Query quants to capture initial snapshot
                 quants = self.env['stock.quant'].search([
                     ('product_id', '=', prod.id),
                     ('location_id', 'in', loc_ids),
@@ -277,17 +324,14 @@ class FoodwayInventoryCountSession(models.Model):
         if not self.env.user.has_group('toruq_inventory.group_inventory_count_manager'):
             raise AccessError(_("Only Inventory Managers can approve inventory counts."))
 
-        # Enforce server-side idempotency & database lock
         self.env.cr.execute("SELECT id, state, adjustment_applied FROM foodway_inventory_count_session WHERE id = %s FOR UPDATE", [self.id])
         session_row = self.env.cr.fetchone()
         if not session_row or session_row[1] not in ['submitted'] or session_row[2]:
             raise UserError(_("This session cannot be approved (already approved or invalid state)."))
 
-        # Recompute movements up to approval timestamp
         now = fields.Datetime.now()
         self.line_ids._recompute_movement_comparison(now)
 
-        # Execute stock adjustments natively using Odoo 18 stock.quant API
         created_moves = self.env['stock.move']
         lines_to_adjust = self.line_ids.filtered(lambda l: l.is_counted and l.inventory_difference != 0.0)
 
@@ -295,7 +339,6 @@ class FoodwayInventoryCountSession(models.Model):
             if line.product_id.tracking in ['lot', 'serial'] and not line.lot_id:
                 raise UserError(_("Cannot adjust product '%s': Lot/Serial number is required for tracked products.") % line.product_id.display_name)
 
-            # Locate or create quant for location + product + lot
             quant = self.env['stock.quant'].search([
                 ('product_id', '=', line.product_id.id),
                 ('location_id', '=', line.location_id.id),
@@ -312,20 +355,17 @@ class FoodwayInventoryCountSession(models.Model):
                     'quantity': 0.0,
                 })
 
-            # Record stock moves created before adjustment
             moves_before = self.env['stock.move'].search([
                 ('product_id', '=', line.product_id.id),
                 ('company_id', '=', self.company_id.id),
                 ('state', '=', 'done')
             ]).ids
 
-            # Set counted quantity on quant and apply inventory adjustment
             quant = quant.with_context(inventory_mode=True)
             quant.inventory_quantity = line.counted_qty
             quant.user_id = self.env.user.id
             quant.action_apply_inventory()
 
-            # Identify newly created stock move
             new_moves = self.env['stock.move'].search([
                 ('product_id', '=', line.product_id.id),
                 ('company_id', '=', self.company_id.id),
