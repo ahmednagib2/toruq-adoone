@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Employee Form View for Honeywell Wedge Scanning -->
+    <record id="view_foodway_inventory_count_employee_form" model="ir.ui.view">
+        <field name="name">foodway.inventory.count.session.employee.form</field>
+        <field name="model">foodway.inventory.count.session</field>
+        <field name="arch" type="xml">
+            <form string="شاشة الجرد الأعمى - ماسح الباركود / Honeywell Handheld Count" create="false" edit="false" delete="false">
+                <header>
+                    <button name="action_submit" string="إرسال الجلسة للمدير" type="object" class="btn-success btn-lg" invisible="state not in ['opened', 'recount_in_progress']" confirm="هل انتهيت من عد كافة المنتجات؟ سيتم إرسال الجلسة للمدير ولن تتمكن من تعديلها."/>
+                    <field name="state" widget="statusbar" statusbar_visible="opened,submitted,approved"/>
+                </header>
+                <sheet>
+                    <div class="alert alert-info text-center fw-bold fs-4 py-2" role="status">
+                        الجرد الأعمى - Honeywell Barcode Wedge Scanner
+                    </div>
+
+                    <group col="2">
+                        <group string="بيانات الجلسة الحالية">
+                            <field name="name" readonly="1"/>
+                            <field name="session_name" readonly="1"/>
+                            <field name="location_id" readonly="1"/>
+                        </group>
+                        <group string="إحصائيات العد">
+                            <field name="total_lines_count" readonly="1"/>
+                            <field name="counted_lines_count" readonly="1"/>
+                            <field name="uncounted_lines_count" readonly="1"/>
+                        </group>
+                    </group>
+
+                    <notebook>
+                        <page string="قائمة منتجات الجلسة / Assigned Products">
+                            <field name="line_ids" readonly="state in ['submitted', 'approved', 'cancelled']">
+                                <list string="المنتجات المسموحة" editable="bottom" create="false" delete="false" decoration-success="is_counted" decoration-muted="not is_counted">
+                                    <field name="product_id" readonly="1"/>
+                                    <field name="barcode" readonly="1"/>
+                                    <field name="product_uom_id" readonly="1"/>
+                                    <field name="lot_id"/>
+                                    <field name="is_counted" readonly="1"/>
+                                    <field name="counted_qty"/>
+                                    <field name="count_datetime" readonly="1"/>
+                                </list>
+                            </field>
+                        </page>
+
+                        <page string="سجل عملياتك / Scan Log">
+                            <field name="entry_ids" readonly="1">
+                                <list string="عمليات المسح" create="false" delete="false">
+                                    <field name="timestamp"/>
+                                    <field name="product_id"/>
+                                    <field name="operation_type"/>
+                                    <field name="previous_qty"/>
+                                    <field name="input_qty"/>
+                                    <field name="new_qty"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Action for Employee Sessions -->
+    <record id="action_foodway_inventory_count_employee_session" model="ir.actions.act_window">
+        <field name="name">جلساتي والجرد الأعمى / My Inventory Counts</field>
+        <field name="res_model">foodway.inventory.count.session</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('assigned_user_ids', 'in', [uid])]</field>
+        <field name="context">{'search_default_in_progress': 1}</field>
+        <field name="view_ids" eval="[(5, 0, 0),
+            (0, 0, {'view_mode': 'list', 'view_id': ref('view_foodway_inventory_count_session_list')}),
+            (0, 0, {'view_mode': 'form', 'view_id': ref('view_foodway_inventory_count_employee_form')})]"/>
+    </record>
+</odoo>

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_foodway_inventory_count_report_wizard_form" model="ir.ui.view">
+        <field name="name">foodway.inventory.count.report.wizard.form</field>
+        <field name="model">foodway.inventory.count.report.wizard</field>
+        <field name="arch" type="xml">
+            <form string="تقرير الجرد الأعمى ومقارنة الفروقات / Manager Inventory Report">
+                <sheet>
+                    <group>
+                        <group string="فلاتر البحث / Filters">
+                            <field name="session_id"/>
+                            <field name="warehouse_id"/>
+                            <field name="location_id"/>
+                        </group>
+                        <group string="النطاق الزمني والتفاصيل">
+                            <field name="date_from"/>
+                            <field name="date_to"/>
+                            <field name="only_discrepancies"/>
+                        </group>
+                    </group>
+                    <group invisible="not excel_file">
+                        <field name="filename" invisible="1"/>
+                        <field name="excel_file" filename="filename" readonly="1"/>
+                    </group>
+                </sheet>
+                <footer>
+                    <button name="action_export_excel" string="تصدير Excel" type="object" class="btn-primary"/>
+                    <button string="إغلاق" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_foodway_inventory_count_report" model="ir.actions.act_window">
+        <field name="name">تقرير وتصدير الجرد الأعمى / Manager Excel Report</field>
+        <field name="res_model">foodway.inventory.count.report.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+</odoo>

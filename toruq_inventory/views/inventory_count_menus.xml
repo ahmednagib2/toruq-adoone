@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Root Menu -->
+    <menuitem id="menu_foodway_blind_inventory_root"
+              name="الجرد الأعمى / Blind Inventory"
+              web_icon="stock,static/description/icon.png"
+              sequence="30"/>
+
+    <!-- Employee Section -->
+    <menuitem id="menu_foodway_blind_inventory_employee"
+              name="جلسات الجرد الخاصة بي / My Counts"
+              parent="menu_foodway_blind_inventory_root"
+              action="action_foodway_inventory_count_employee_session"
+              groups="group_inventory_count_employee"
+              sequence="10"/>
+
+    <!-- Manager Section -->
+    <menuitem id="menu_foodway_blind_inventory_manager"
+              name="إدارة الجرد والإشراف / Management"
+              parent="menu_foodway_blind_inventory_root"
+              groups="group_inventory_count_manager"
+              sequence="20"/>
+
+    <menuitem id="menu_foodway_blind_inventory_manager_sessions"
+              name="جلسات الجرد / Sessions"
+              parent="menu_foodway_blind_inventory_manager"
+              action="action_foodway_inventory_count_manager_session"
+              sequence="10"/>
+
+    <menuitem id="menu_foodway_blind_inventory_manager_discrepancies"
+              name="مراجعة الفروقات / Discrepancy Review"
+              parent="menu_foodway_blind_inventory_manager"
+              action="action_foodway_inventory_count_discrepancy_lines"
+              sequence="20"/>
+
+    <menuitem id="menu_foodway_blind_inventory_manager_report"
+              name="التقارير وتصدير Excel / Excel Export"
+              parent="menu_foodway_blind_inventory_manager"
+              action="action_foodway_inventory_count_report"
+              sequence="30"/>
+</odoo>
