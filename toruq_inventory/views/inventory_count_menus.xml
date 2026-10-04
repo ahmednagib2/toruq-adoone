@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <!-- Root Menu -->
+    <!-- Root Menu / App Switcher Icon -->
     <menuitem id="menu_foodway_blind_inventory_root"
               name="الجرد الأعمى / Blind Inventory"
-              web_icon="stock,static/description/icon.png"
+              web_icon="toruq_inventory,static/description/icon.png"
               sequence="30"/>
 
     <!-- Employee Section -->
