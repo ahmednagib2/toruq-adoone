@@ -205,18 +205,27 @@ class FoodwayInventoryCountSession(models.Model):
         if self.state not in ['opened', 'recount_in_progress']:
             raise UserError(_("Cannot scan barcodes when session state is '%s'.") % self.state)
 
+        if self.env.user not in self.assigned_user_ids and not self.env.user.has_group('toruq_inventory.group_inventory_count_manager'):
+            raise AccessError(_("You are not assigned to count in this session."))
+
         if not self.scan_barcode:
             raise UserError(_("برجاء مسح أو إدخال الباركود أولاً!"))
 
         barcode_str = self.scan_barcode.strip()
+
+        # Handle potential duplicate / ambiguous barcodes
+        matching_products = self.env['product.product'].search([
+            '|', ('barcode', '=', barcode_str), ('default_code', '=', barcode_str)
+        ])
+        if len(matching_products) > 1:
+            raise UserError(_("Ambiguous barcode: Multiple products (%s) share barcode '%s'. Please refine product identification.") % (
+                ', '.join(matching_products.mapped('display_name')), barcode_str
+            ))
+
         lines = self.line_ids.filtered(lambda l: (l.barcode and l.barcode.strip() == barcode_str) or (l.product_id.default_code and l.product_id.default_code.strip() == barcode_str))
         
-        if not lines:
-            product = self.env['product.product'].search([
-                '|', ('barcode', '=', barcode_str), ('default_code', '=', barcode_str)
-            ], limit=1)
-            if product:
-                lines = self.line_ids.filtered(lambda l: l.product_id.id == product.id)
+        if not lines and matching_products:
+            lines = self.line_ids.filtered(lambda l: l.product_id.id in matching_products.ids)
 
         if not lines:
             raise UserError(_("الباركود '%s' غير موجود ضمن قائمة منتجات هذه الجلسة!") % barcode_str)
