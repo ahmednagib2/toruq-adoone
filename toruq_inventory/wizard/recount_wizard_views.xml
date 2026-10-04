@@ -22,4 +22,11 @@
             </form>
         </field>
     </record>
+
+    <record id="action_foodway_inventory_count_recount_wizard" model="ir.actions.act_window">
+        <field name="name">طلب إعادة العد / Request Recount</field>
+        <field name="res_model">foodway.inventory.count.recount.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
 </odoo>
